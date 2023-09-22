@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as spio
-from  sklearn.preprocessing import MinMaxScaler
 import random
 import time
 import os
@@ -41,31 +40,31 @@ def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_
             l_data = l_data + 1
 
     #  add all labels together
-    l_lables  = 0
-    t_lables = []
+    l_labels  = 0
+    t_labels = []
     for i, item in enumerate(labels):
-        if len(t_lables)==n_seqs*max_time:
+        if len(t_labels)==n_seqs*max_time:
             break
         item= item[0]
         for lebel in item:
-            if l_lables == n_seqs * max_time:
+            if l_labels == n_seqs * max_time:
                 break
-            t_lables.append(str(lebel))
-            l_lables = l_lables + 1
+            t_labels.append(str(lebel))
+            l_labels = l_labels + 1
 
     del values
     data = np.asarray(data)
     shape_v = data.shape
     data = np.reshape(data, [shape_v[0], -1])
-    t_lables = np.array(t_lables)
+    t_labels = np.array(t_labels)
     _data  = np.asarray([],dtype=np.float64).reshape(0,shape_v[1])
     _labels = np.asarray([],dtype=np.dtype('|S1')).reshape(0,)
     for cl in classes:
-        _label = np.where(t_lables == cl)
+        _label = np.where(t_labels == cl)
         permute = np.random.permutation(len(_label[0]))
         _label = _label[0][permute[:max_nlabel]]
         _data = np.concatenate((_data, data[_label]))
-        _labels = np.concatenate((_labels, t_lables[_label]))
+        _labels = np.concatenate((_labels, t_labels[_label]))
 
     data = _data[:(len(_data)/ max_time) * max_time, :]
     _labels = _labels[:(len(_data) / max_time) * max_time]
@@ -131,6 +130,7 @@ def plot_confusion_matrix(cm, classes = ['F', 'N', 'S', 'V'], normalize = True, 
     plt.xlabel('Predicted Label')
     plt.tight_layout()
 
+# @TODO Incroporar medidas de micro Average y micro F1
 def evaluate_metrics(confusion_matrix):
     # https://stackoverflow.com/questions/31324218/scikit-learn-how-to-obtain-true-positive-true-negative-false-positive-and-fal
     FP = confusion_matrix.sum(axis=0) - np.diag(confusion_matrix)
@@ -143,16 +143,8 @@ def evaluate_metrics(confusion_matrix):
     TNR = TN / (TN + FP)
     # Precision or positive predictive value
     PPV = TP / (TP + FP)
-    # Negative predictive value
-    NPV = TN / (TN + FN)
-    # Fall out or false positive rate
-    FPR = FP / (FP + TN)
-    # False negative rate
-    FNR = FN / (TP + FN)
-    # False discovery rate
-    FDR = FP / (TP + FP)
     # Overlall F1 score
-    F1_score = 2 * (PPV * TPR) / (PPV + TPR)
+    F1_score = 2 * TP / (2*TP+FP + FN)
     # Overall accuracy
     ACC = (TP + TN) / (TP + FP + FN + TN)
     F1_score_mean = np.mean(F1_score)
@@ -163,7 +155,6 @@ def evaluate_metrics(confusion_matrix):
 def batch_data(x, y, batch_size):
     shuffle = np.random.permutation(len(x))
     start = 0
-    #from IPython.core.debugger import Tracer; Tracer()()
     x = x[shuffle]
     y = y[shuffle]
     while start + batch_size <= len(x):
@@ -171,7 +162,6 @@ def batch_data(x, y, batch_size):
         start += batch_size
 def build_network(inputs, dec_inputs,char2numY,n_channels=10,input_depth=280,num_units=128,max_time=10,bidirectional=False):
     _inputs = tf.reshape(inputs, [-1, n_channels, input_depth / n_channels])
-    # _inputs = tf.reshape(inputs, [-1,input_depth,n_channels])
 
     # #(batch*max_time, 280, 1) --> (N, 280, 18)
     conv1 = tf.layers.conv1d(inputs=_inputs, filters=32, kernel_size=2, strides=1,
@@ -258,7 +248,6 @@ def run_program(args):
     batch_size = args.batch_size # 10
     num_units = args.num_units
     bidirectional = args.bidirectional
-    # lstm_layers = args.lstm_layers
     n_oversampling = args.n_oversampling
     checkpoint_dir = args.checkpoint_dir
     ckpt_name = args.ckpt_name
@@ -284,7 +273,6 @@ def run_program(args):
     Y = [[char2numY['<GO>']] + [char2numY[y_] for y_ in date] for date in Y]
     Y = np.array(Y)
 
-    x_seq_length = len(X[0])
     y_seq_length = len(Y[0])- 1
 
     # Placeholders
@@ -292,7 +280,6 @@ def run_program(args):
     targets = tf.placeholder(tf.int32, (None, None), 'targets')
     dec_inputs = tf.placeholder(tf.int32, (None, None), 'output')
 
-    # logits = build_network(inputs,dec_inputs=dec_inputs)
     logits = build_network(inputs, dec_inputs, char2numY, n_channels=n_channels, input_depth=input_depth, num_units=num_units, max_time=max_time,
                   bidirectional=bidirectional)
     with tf.name_scope("optimization"):
@@ -441,7 +428,7 @@ def run_program(args):
             plt.close()
             print("Loss plot saved to {}".format(plot_file_path))
         except Exception as e:
-            print("Error saving loss plot: {}".format(stre(e)))
+            print("Error saving loss plot: {}".format(str(e)))
   
         print(str(datetime.now()))
         # test_model()
