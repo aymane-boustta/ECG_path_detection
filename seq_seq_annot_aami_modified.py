@@ -5,7 +5,7 @@ import random
 import time
 import os
 from datetime import datetime
-from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, auc
+from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, auc, accuracy_score, f1_score
 import tensorflow as tf
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
@@ -131,7 +131,7 @@ def plot_confusion_matrix(cm, classes = ['F', 'N', 'S', 'V'], normalize = True, 
     plt.tight_layout()
 
 # @TODO Incroporar medidas de micro Average y micro F1
-def evaluate_metrics(confusion_matrix):
+def evaluate_metrics(confusion_matrix, y_pred, y_true):
     # https://stackoverflow.com/questions/31324218/scikit-learn-how-to-obtain-true-positive-true-negative-false-positive-and-fal
     FP = confusion_matrix.sum(axis=0) - np.diag(confusion_matrix)
     FN = confusion_matrix.sum(axis=1) - np.diag(confusion_matrix)
@@ -150,8 +150,9 @@ def evaluate_metrics(confusion_matrix):
     F1_score_mean = np.mean(F1_score)
     # ACC_micro = (sum(TP) + sum(TN)) / (sum(TP) + sum(FP) + sum(FN) + sum(TN))
     ACC_macro = np.mean(ACC) # to get a sense of effectiveness of our method on the small classes we computed this average (macro-average)
-
-    return ACC_macro, ACC, TPR, TNR, PPV, F1_score_mean, F1_score
+    f1_micro = f1_score(y_true, y_pred, average='micro')
+    accuracy_micro = accuracy_score(y_true, y_pred)
+    return ACC_macro, ACC, TPR, TNR, PPV, F1_score_mean, F1_score, f1_micro, accuracy_micro
 def batch_data(x, y, batch_size):
     shuffle = np.random.permutation(len(x))
     start = 0
@@ -350,8 +351,8 @@ def run_program(args):
             sum_test_conf.append(confusion_matrix(y_true, y_pred,labels=range(len(char2numY)-1)))
 
         sum_test_conf= np.mean(np.array(sum_test_conf, dtype=np.float32), axis=0)
-        acc_avg, acc, sensitivity, specificity, PPV, F1_score_mean, F1_score = evaluate_metrics(sum_test_conf)
-        print('Average Accuracy is: {:>6.4f}. Averge F1_score is:{:>6.4f} on test set'.format(acc_avg, F1_score_mean))
+        acc_avg, acc, sensitivity, specificity, PPV, F1_score_mean, F1_score, f1_micro, accuracy_micro = evaluate_metrics(sum_test_conf, y_pred, y_true)
+        print('Average Accuracy is: {:>6.4f}. Averge F-score is: {:>6.4f}. Micro Accuracy is: {:>6.4f}. Micro F-score is: {:>6.4f} on test set'.format(acc_avg, F1_score_mean, accuracy_micro, f1_micro))
         for index_ in range(n_classes):
             print("\t{} rhythm -> Sensitivity: {:1.4f}, Specificity : {:1.4f}, Precision (PPV) : {:1.4f}, Accuracy : {:1.4f}, F1_score : {:1.4f}".format(classes[index_],
                                                                                                           sensitivity[
@@ -422,7 +423,7 @@ def run_program(args):
         plt.ylabel('Loss')
         plt.title('Loss Over Epochs')
         plt.grid(True)
-        plot_file_path = '/Users/macbookair/Desktop/Thesis_ecg/Database/Test_MITBIH/loss_plot.png'
+        plot_file_path = './loss_plot.png'
         try:
             plt.savefig(plot_file_path)
             plt.close()
