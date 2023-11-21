@@ -14,8 +14,9 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 import argparse
 import itertools
+
 random.seed(654)
-def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_nlabel=100, trainset=1):
+def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_nlabel=100):
     def normalize(data):
         data = np.nan_to_num(data)  # removing NaNs and Infs
         data = data - np.mean(data)
@@ -23,17 +24,11 @@ def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_
         return data
 
     # read data
-    data = []
+    data = []  
     samples = spio.loadmat(filename + ".mat")
-    if trainset == 1: #DS1
-        samples = samples['s2s_mitbih_DS1']
-
-    else: # DS2
-        samples = samples['s2s_mitbih_DS2']
-
+    samples = samples['s2s_mitbih']
     values = samples[0]['seg_values']
     labels = samples[0]['seg_labels']
-    items_len = len(labels)
     num_annots = sum([item.shape[0] for item in values])
 
     n_seqs = num_annots / max_time
@@ -48,34 +43,31 @@ def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_
             l_data = l_data + 1
 
     #  add all labels together
-    l_lables  = 0
-    t_lables = []
+    l_labels  = 0
+    t_labels = []
     for i, item in enumerate(labels):
-        if len(t_lables)==n_seqs*max_time:
+        if len(t_labels)==n_seqs*max_time:
             break
         item= item[0]
         for lebel in item:
-            if l_lables == n_seqs * max_time:
+            if l_labels == n_seqs * max_time:
                 break
-            t_lables.append(str(lebel))
-            l_lables = l_lables + 1
+            t_labels.append(str(lebel))
+            l_labels = l_labels + 1
 
     del values
     data = np.asarray(data)
     shape_v = data.shape
     data = np.reshape(data, [shape_v[0], -1])
-    t_lables = np.array(t_lables)
+    t_labels = np.array(t_labels)
     _data  = np.asarray([],dtype=np.float64).reshape(0,shape_v[1])
     _labels = np.asarray([],dtype=np.dtype('|S1')).reshape(0,)
     for cl in classes:
-        _label = np.where(t_lables == cl)
+        _label = np.where(t_labels == cl)
         permute = np.random.permutation(len(_label[0]))
         _label = _label[0][permute[:max_nlabel]]
-        # _label = _label[0][:max_nlabel]
-        # permute = np.random.permutation(len(_label))
-        # _label = _label[permute]
         _data = np.concatenate((_data, data[_label]))
-        _labels = np.concatenate((_labels, t_lables[_label]))
+        _labels = np.concatenate((_labels, t_labels[_label]))
 
     data = _data[:(len(_data)/ max_time) * max_time, :]
     _labels = _labels[:(len(_data) / max_time) * max_time]
@@ -90,47 +82,41 @@ def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_
     labels = np.asarray(labels)
     data= data[permute]
     labels = labels[permute]
-
     print('Records processed!')
-
     return data, labels
-def plot_confusion_matrix(cm, classes = ['F', 'N', 'S', 'V'], normalize = True, title='Confusion matrix', cmap=plt.cm.Blues):
-    if normalize:
-        row_sums = cm.sum(axis=1)
-        row_sums[row_sums == 0] = 1e-6
-        cm = cm.astype('float') / row_sums[:, np.newaxis]
-        
-    plt.figure(figsize=(8, 6))
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-    
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
 
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, format(cm[i, j], fmt), horizontalalignment="center", color="white" if cm[i, j] > thresh else "black")
 
-    plt.ylabel('True Label')
-    plt.xlabel('Predicted Label')
-    plt.tight_layout()
 
 def batch_data(x, y, batch_size):
     shuffle = np.random.permutation(len(x))
     start = 0
-#     from IPython.core.debugger import Tracer; Tracer()()
     x = x[shuffle]
     y = y[shuffle]
     while start + batch_size <= len(x):
-        yield x[start:start+batch_size], y[start:start+batch_size]
+        yield x[start:start + batch_size], y[start:start + batch_size]
         start += batch_size
+# def batch_data(x, y, batch_size):
+#     shuffle = np.random.permutation(len(x))
+#     start = 0
+#     x = x[shuffle]
+#     y = y[shuffle]
+#     max_seq_length = max(max(len(seq) for seq in batch_x) for batch_x in x)
+#     while start + batch_size <= len(x):
+#         batch_x, batch_y = x[start:start + batch_size], y[start:start + batch_size]
+
+#         # Dynamically calculate max sequence length in the current batch
+#         max_seq_length = max(max_seq_length, max(max(len(seq) for seq in batch_x), max(len(seq) for seq in batch_y)))
+
+#         # Pad sequences to the same length
+#         padded_batch_x = pad_sequences(batch_x, max_seq_length)
+#         padded_batch_y = pad_sequences(batch_y, max_seq_length)  # Target sequences have the same length
+
+#         yield padded_batch_x, padded_batch_y
+#         start += batch_size
+
+    
 def build_network(inputs, dec_inputs,char2numY,n_channels=10,input_depth=280,num_units=128,max_time=10,bidirectional=False):
     _inputs = tf.reshape(inputs, [-1, n_channels, input_depth / n_channels])
-    # _inputs = tf.reshape(inputs, [-1,input_depth,n_channels])
 
     # #(batch*max_time, 280, 1) --> (N, 280, 18)
     conv1 = tf.layers.conv1d(inputs=_inputs, filters=32, kernel_size=2, strides=1,
@@ -142,18 +128,15 @@ def build_network(inputs, dec_inputs,char2numY,n_channels=10,input_depth=280,num
     max_pool_2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=2, strides=2, padding='same')
 
     conv3 = tf.layers.conv1d(inputs=max_pool_2, filters=128, kernel_size=2, strides=1,
-                              padding='same', activation=tf.nn.relu)
+                             padding='same', activation=tf.nn.relu)
 
     shape = conv3.get_shape().as_list()
-    data_input_embed = tf.reshape(conv3, (-1, max_time,shape[1]*shape[2]))
-
-    
-    embed_size = 10 #128 lstm_size # shape[1]*shape[2]
+    data_input_embed = tf.reshape(conv3, (-1, max_time, shape[1] * shape[2]))
+    embed_size = 10  # 128 lstm_size # shape[1]*shape[2]
 
     # Embedding layers
     output_embedding = tf.Variable(tf.random_uniform((len(char2numY), embed_size), -1.0, 1.0), name='dec_embedding')
     data_output_embed = tf.nn.embedding_lookup(output_embedding, dec_inputs)
-
 
     with tf.variable_scope("encoding") as encoding_scope:
         if not bidirectional:
@@ -198,19 +181,19 @@ def str2bool(v):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--epochs', type=int, default=500)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--max_time', type=int, default=10)
     parser.add_argument('--test_steps', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=20)
-    parser.add_argument('--data_dir', type=str, default='data/s2s_mitbih_aami_DS1DS2')
+    parser.add_argument('--data_dir', type=str, default='Test_MITBIH/s2s_mitbih_aami')
     parser.add_argument('--bidirectional', type=str2bool, default=str2bool('False'))
     # parser.add_argument('--lstm_layers', type=int, default=2)
     parser.add_argument('--num_units', type=int, default=128)
-    parser.add_argument('--n_oversampling', type=int, default=6000)
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints-seq2seq_DS1DS2')
-    parser.add_argument('--ckpt_name', type=str, default='seq2seq_mitbih_DS1DS2.ckpt')
+    parser.add_argument('--n_oversampling', type=int, default=10000)
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints-seq2seq')
+    parser.add_argument('--ckpt_name', type=str, default='seq2seq_mitbih.ckpt')
     parser.add_argument('--classes', nargs='+', type=chr,
-                        default=['N', 'S','V'])
+                        default=['F','N', 'S','V'])
     args = parser.parse_args()
     run_program(args)
 def run_program(args):
@@ -220,56 +203,40 @@ def run_program(args):
     batch_size = args.batch_size # 10
     num_units = args.num_units
     bidirectional = args.bidirectional
-    # lstm_layers = args.lstm_layers
     n_oversampling = args.n_oversampling
     checkpoint_dir = args.checkpoint_dir
     ckpt_name = args.ckpt_name
     test_steps = args.test_steps
-    classes= args.classes # ['N', 'S','V']
+    classes= args.classes
     filename = args.data_dir
 
-    X_train, y_train = read_mitbih(filename, max_time, classes=classes, max_nlabel=50000,trainset=1)
-    X_test, y_test = read_mitbih(filename, max_time, classes=classes, max_nlabel=50000,trainset=0)
-    input_depth = X_train.shape[2]
+    X, Y = read_mitbih(filename,max_time,classes=classes,max_nlabel=100000) #11000
+    print ("# of sequences: ", len(X))
+    input_depth = X.shape[2]
     n_channels = 10
-    print ("# of sequences: ", len(X_train))
-
-    classes = np.unique(y_train)
+    classes = np.unique(Y)
     char2numY = dict(zip(classes, range(len(classes))))
     n_classes = len(classes)
-    print ('Classes (training): ', classes)
+    print ('Classes: ', classes)
     for cl in classes:
         ind = np.where(classes == cl)[0][0]
-        print (cl, len(np.where(y_train.flatten() == cl)[0]))
-
-    print ('Classes (test): ', classes)
-    for cl in classes:
-        ind = np.where(classes == cl)[0][0]
-        print (cl, len(np.where(y_test.flatten() == cl)[0]))
-
+        print (cl, len(np.where(Y.flatten()==cl)[0]))
 
     char2numY['<GO>'] = len(char2numY)
     num2charY = dict(zip(char2numY.values(), char2numY.keys()))
 
-    y_train = [[char2numY['<GO>']] + [char2numY[y_] for y_ in date] for date in y_train]
-    y_test = [[char2numY['<GO>']] + [char2numY[y_] for y_ in date] for date in y_test]
-    y_test = np.asarray(y_test)
-    y_train = np.array(y_train)
+    Y = [[char2numY['<GO>']] + [char2numY[y_] for y_ in date] for date in Y]
+    Y = np.array(Y)
 
-    x_seq_length = len(X_train[0])
-    y_seq_length = len(y_train[0]) - 1
-
+    y_seq_length = len(Y[0])- 1
+    
     # Placeholders
-    inputs = tf.placeholder(tf.float32, [None, max_time, input_depth], name='inputs')
+    inputs = tf.placeholder(tf.float32, [None, max_time, input_depth], name = 'inputs')
     targets = tf.placeholder(tf.int32, (None, None), 'targets')
     dec_inputs = tf.placeholder(tf.int32, (None, None), 'output')
 
     logits = build_network(inputs, dec_inputs, char2numY, n_channels=n_channels, input_depth=input_depth, num_units=num_units, max_time=max_time,
                   bidirectional=bidirectional)
-    # decoder_prediction = tf.argmax(logits, 2)
-    # confusion = tf.confusion_matrix(labels=tf.argmax(targets, 1), predictions=tf.argmax(logits, 2), num_classes=len(char2numY) - 1)# it is wrong
-    # mean_accuracy,update_mean_accuracy = tf.metrics.mean_per_class_accuracy(labels=targets, predictions=decoder_prediction, num_classes=len(char2numY) - 1)
-
     with tf.name_scope("optimization"):
         # Loss function
         vars = tf.trainable_variables()
@@ -277,12 +244,14 @@ def run_program(args):
         lossL2 = tf.add_n([tf.nn.l2_loss(v) for v in vars
                             if 'bias' not in v.name]) * beta
         loss = tf.contrib.seq2seq.sequence_loss(logits, targets, tf.ones([batch_size, y_seq_length]))
+        #loss = tf.contrib.seq2seq.sequence_loss(logits, targets, weights=tf.ones([batch_size, tf.shape(targets)[1]]), average_across_timesteps=True, average_across_batch=True)
         # Optimizer
         loss = tf.reduce_mean(loss + lossL2)
         optimizer = tf.train.RMSPropOptimizer(1e-3).minimize(loss)
 
 
-    # train the graph
+    # split the dataset into the training and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
     # over-sampling: SMOTE
     X_train = np.reshape(X_train,[X_train.shape[0]*X_train.shape[1],-1])
@@ -292,20 +261,32 @@ def run_program(args):
     for cl in classes:
         ind = np.where(classes == cl)[0][0]
         nums.append(len(np.where(y_train.flatten()==ind)[0]))
-
-    # ratio={0:nums[0],1:nums[0],2:nums[0]}
-    # ratio={0:7000,1:nums[1],2:7000,3:7000}
-    ratio={0:nums[0],1:n_oversampling+1000,2:n_oversampling}
+    # ratio={0:nums[3],1:nums[1],2:nums[3],3:nums[3]} # the best with 11000 for N
+    ratio={0:n_oversampling,1:nums[1],2:n_oversampling,3:n_oversampling}
     sm = SMOTE(random_state=12,ratio=ratio)
     X_train, y_train = sm.fit_sample(X_train, y_train)
 
-    X_train = X_train[:(X_train.shape[0]/max_time)*max_time,:]
-    y_train = y_train[:(X_train.shape[0]/max_time)*max_time]
+    # X_train = X_train[:(X_train.shape[0]/max_time)*max_time,:]
+    # y_train = y_train[:(X_train.shape[0]/max_time)*max_time]
 
-    X_train = np.reshape(X_train,[-1,X_test.shape[1],X_test.shape[2]])
-    y_train = np.reshape(y_train,[-1,y_test.shape[1]-1,])
+    # X_train = np.reshape(X_train,[-1,X_test.shape[1],X_test.shape[2]])
+    # y_train = np.reshape(y_train,[-1,y_test.shape[1]-1,])
+    
+    X_train = X_train[:(X_train.shape[0]//max_time)*max_time, :]
+    y_train = y_train[:(X_train.shape[0]//max_time)*max_time]
+
+    X_train = np.reshape(X_train, [-1, X_test.shape[1], X_test.shape[2]])
+    y_train = np.reshape(y_train, [-1, y_test.shape[1] - 1])
+
     y_train= [[char2numY['<GO>']] + [y_ for y_ in date] for date in y_train]
     y_train = np.array(y_train)
+
+
+    print("Length of X_train:", len(X_train))
+    print("Length of y_train:", len(y_train))
+    print("Length of X_test:", len(X_test))
+    print("Length of y_test:", len(y_test))
+
 
     print ('Classes in the training set: ', classes)
     for cl in classes:
@@ -314,12 +295,6 @@ def run_program(args):
     print ("------------------y_train samples--------------------")
     for ii in range(2):
       print(''.join([num2charY[y_] for y_ in list(y_train[ii+5])]))
-
-    print ('Classes in the training set: ', classes)
-    for cl in classes:
-        ind = np.where(classes == cl)[0][0]
-        print (cl, len(np.where(y_test.flatten()==ind)[0]))
-
     print ("------------------y_test samples--------------------")
     for ii in range(2):
       print(''.join([num2charY[y_] for y_ in list(y_test[ii+5])]))
@@ -360,24 +335,25 @@ def run_program(args):
         print ('# of Params: ', np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]))
 
     count_prameters()
+
     if (os.path.exists(checkpoint_dir) == False):
         os.mkdir(checkpoint_dir)
-
+    # train the graph
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         saver = tf.train.Saver()
         print(str(datetime.now()))
-        pre_acc_avg = 0.0
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        pre_acc_avg = 0.0
         if ckpt and ckpt.model_checkpoint_path:
             # # Restore
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
             saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir))
-            
-            test_model()
+            confusion_matrix_result, classification_report_result = test_model()
         else:
-
+            
             #max_seq_length = max(max(len(seq) for seq in seqs) for seqs in X_train)
             for epoch_i in range(epochs):
                 train_loss = 0.0
@@ -401,7 +377,7 @@ def run_program(args):
                 train_loss_history.append(train_loss)
                 print('Epoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f} Epoch duration: {:>6.3f}s'.format(epoch_i, batch_loss,
                                                                                         accuracy, time.time() - start_time))
-
+                
                 #if epoch_i%test_steps==0 or epoch_i==epochs - 1:
                 if epoch_i % 3 == 0 or epoch_i==epochs - 1:
                     print("------------------------------- Testing the model --------------------------------")
@@ -441,11 +417,12 @@ def run_program(args):
             print("Model saved in path: %s" % save_path)
             
             
+  
         print(str(datetime.now()))
-
         # test_model()
 if __name__ == '__main__':
     main()
+
 
 
 
