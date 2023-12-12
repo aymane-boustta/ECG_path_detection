@@ -16,7 +16,7 @@ record_list = physionetdb('nsrdb');
 %path_to_save_records = 'path_to_downloaded_database';
 
 path_to_exes = '/Users/macbookair/Desktop/Thesis_ecg/mcode/nativelibs/macosx/bin';
-path_to_save_records = '/Users/macbookair/Desktop/Thesis_ecg/Database/nsrdb_1';
+path_to_save_records = 'path_to_downloaded_database';
 
 % path_to_exes = 'C:\my_files\ECG_research\mcode\nativelibs\windows\bin';
 % path_to_save_records = 'C:\my_files\ECG_dataset\MIT-BIH\mitbihdb';
