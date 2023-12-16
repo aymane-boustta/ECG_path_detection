@@ -14,6 +14,8 @@ from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 import argparse
 import itertools
+import warnings
+
 
 random.seed(654)
 def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_nlabel=100):
@@ -85,33 +87,6 @@ def read_mitbih(filename, max_time=100, classes= ['F', 'N', 'S', 'V', 'Q'], max_
     print('Records processed!')
     return data, labels
 
-# def plot_confusion_matrix(cm, classes = ['F', 'N', 'S', 'V'], normalize = True, title='Confusion matrix', cmap=plt.cm.Blues):
-#     if normalize:
-#         row_sums = cm.sum(axis=1)
-#         row_sums[row_sums == 0] = 1e-6
-#         cm = cm.astype('float') / row_sums[:, np.newaxis]
-        
-#     plt.figure(figsize=(8, 6))
-#     plt.imshow(cm, interpolation='nearest', cmap=cmap)
-#     plt.title(title)
-#     plt.colorbar()
-    
-#     tick_marks = np.arange(len(classes))
-#     plt.xticks(tick_marks, classes, rotation=45)
-#     plt.yticks(tick_marks, classes)
-
-#     fmt = '.2f' if normalize else 'd'
-#     thresh = cm.max() / 2.
-    
-#     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-#         plt.text(j, i, format(cm[i, j], fmt), horizontalalignment="center", color="white" if cm[i, j] > thresh else "black")
-
-#     plt.ylabel('True Label')
-#     plt.xlabel('Predicted Label')
-#     plt.tight_layout()
-
-
-
 def batch_data(x, y, batch_size):
     shuffle = np.random.permutation(len(x))
     start = 0
@@ -120,26 +95,7 @@ def batch_data(x, y, batch_size):
     while start + batch_size <= len(x):
         yield x[start:start + batch_size], y[start:start + batch_size]
         start += batch_size
-# def batch_data(x, y, batch_size):
-#     shuffle = np.random.permutation(len(x))
-#     start = 0
-#     x = x[shuffle]
-#     y = y[shuffle]
-#     max_seq_length = max(max(len(seq) for seq in batch_x) for batch_x in x)
-#     while start + batch_size <= len(x):
-#         batch_x, batch_y = x[start:start + batch_size], y[start:start + batch_size]
-
-#         # Dynamically calculate max sequence length in the current batch
-#         max_seq_length = max(max_seq_length, max(max(len(seq) for seq in batch_x), max(len(seq) for seq in batch_y)))
-
-#         # Pad sequences to the same length
-#         padded_batch_x = pad_sequences(batch_x, max_seq_length)
-#         padded_batch_y = pad_sequences(batch_y, max_seq_length)  # Target sequences have the same length
-
-#         yield padded_batch_x, padded_batch_y
-#         start += batch_size
-
-    
+   
 def build_network(inputs, dec_inputs,char2numY,n_channels=10,input_depth=280,num_units=128,max_time=10,bidirectional=False):
     _inputs = tf.reshape(inputs, [-1, n_channels, input_depth / n_channels])
 
@@ -216,11 +172,13 @@ def main():
     parser.add_argument('--num_units', type=int, default=128)
     parser.add_argument('--n_oversampling', type=int, default=10000)
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints-seq2seq')
-    parser.add_argument('--ckpt_name', type=str, default='seq2seq_mitbih.ckpt')
+    parser.add_argument('--ckpt_name', type=str, default='seq2seq_incartdb.ckpt')
     parser.add_argument('--classes', nargs='+', type=chr,
                         default=['F','N', 'S','V'])
     args = parser.parse_args()
-    run_program(args)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        run_program(args)
 def run_program(args):
     print(args)
     max_time = args.max_time # 5 3 second best 10# 40 # 100
@@ -277,6 +235,7 @@ def run_program(args):
 
     # split the dataset into the training and test sets
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+    X_train_otherdb, X_test_otherdb, y_train_otherdb, y_test_otherdb = train_test_split(X, Y, test_size=0.9999, random_state=42)
 
     # over-sampling: SMOTE
     X_train = np.reshape(X_train,[X_train.shape[0]*X_train.shape[1],-1])
@@ -311,7 +270,7 @@ def run_program(args):
     print("Length of y_train:", len(y_train))
     print("Length of X_test:", len(X_test))
     print("Length of y_test:", len(y_test))
-
+    print("Length of y_test_otherdb:", len(y_test_otherdb))
 
     print ('Classes in the training set: ', classes)
     for cl in classes:
@@ -349,10 +308,37 @@ def run_program(args):
         confusion_matrix_result = confusion_matrix(y_true_batch, y_pred_batch, labels=range(len(char2numY) - 1))
         print("------------------------- Confusion matrix ------------------------")
         print(confusion_matrix_result)
-        classification_report_result = classification_report(y_true_batch, y_pred_batch, target_names=classes, digits=4)
-
-        
+        classification_report_result = classification_report(y_true_batch, y_pred_batch, target_names=classes, digits=4)        
         return confusion_matrix_result, classification_report_result
+        
+    def test_model_for_other_db():
+        acc_track = []
+        sum_test_conf = []
+        y_true_batch = []  
+        y_pred_batch = []
+        for batch_i, (source_batch, target_batch) in enumerate(batch_data(X_test_otherdb, y_test_otherdb, batch_size)):
+
+            dec_input = np.zeros((len(source_batch), 1)) + char2numY['<GO>']
+            for i in range(y_seq_length):
+                batch_logits = sess.run(logits,
+                                        feed_dict={inputs: source_batch, dec_inputs: dec_input})
+                prediction = batch_logits[:, -1].argmax(axis=-1)
+                dec_input = np.hstack([dec_input, prediction[:, None]])
+
+            acc_track.append(dec_input[:, 1:] == target_batch[:, 1:])
+            y_true= target_batch[:, 1:].flatten()
+            y_pred = dec_input[:, 1:].flatten()
+            y_true_batch.extend(y_true)  
+            y_pred_batch.extend(y_pred)
+            
+        print("The shape of y_pred : " + str(len(y_pred_batch))) # 200 pulses x 101 the length of the sequence y
+        print("The shape of y_true  : " + str(len(y_true_batch)))
+        confusion_matrix_result = confusion_matrix(y_true_batch, y_pred_batch, labels=range(len(char2numY) - 1))
+        print("------------------------- Confusion matrix ------------------------")
+        print(confusion_matrix_result)
+        classification_report_result = classification_report(y_true_batch, y_pred_batch, target_names=classes, digits=4)        
+        return confusion_matrix_result, classification_report_result
+
     train_loss_history = []
     test_loss_history = []
     loss_track = []
@@ -370,13 +356,24 @@ def run_program(args):
         saver = tf.train.Saver()
         print(str(datetime.now()))
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-        pre_acc_avg = 0.0
         if ckpt and ckpt.model_checkpoint_path:
             # # Restore
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
             saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir))
             confusion_matrix_result, classification_report_result = test_model()
+            print(classification_report_result)
+            checkpoint_dir_mitbih = '/Users/macbookair/Desktop/Thesis_ecg/Database/Test_MITBIH/checkpoints-seq2seq'
+            ckpt = tf.train.get_checkpoint_state(checkpoint_dir_mitbih)
+            if ckpt and ckpt.model_checkpoint_path:
+                dataset_name = os.path.basename(os.path.dirname(checkpoint_dir_mitbih))
+                print('**********************************************   Testing the model trained on {}'.format(dataset_name))
+                ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+                # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
+                saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir_mitbih))
+                confusion_matrix_result, classification_report_result = test_model_for_other_db()
+                print(classification_report_result)
+
         else:
             
             max_seq_length = max(max(len(seq) for seq in seqs) for seqs in X_train)
@@ -403,8 +400,8 @@ def run_program(args):
                 print('Epoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f} Epoch duration: {:>6.3f}s'.format(epoch_i, batch_loss,
                                                                                         accuracy, time.time() - start_time))
                 
-                #if epoch_i%test_steps==0 or epoch_i==epochs - 1:
-                if epoch_i % 3 == 0 or epoch_i==epochs - 1:
+                if epoch_i%test_steps==0 or epoch_i==epochs - 1:
+                #if epoch_i % 3 == 0 or epoch_i==epochs - 1:
                     print("------------------------------- Testing the model --------------------------------")
                     test_loss = 0.0  
                     test_acc = []
@@ -446,6 +443,7 @@ def run_program(args):
         print(str(datetime.now()))
         # test_model()
 if __name__ == '__main__':
+    warnings.filterwarnings("ignore", category=UserWarning)
     main()
 
 
