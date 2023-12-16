@@ -257,6 +257,8 @@ def run_program(args):
 
     # split the dataset into the training and test sets
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+    X_train_otherdb, X_test_otherdb, y_train_otherdb, y_test_otherdb = train_test_split(X, Y, test_size=0.9999, random_state=42)
+
 
     # over-sampling: SMOTE
     X_train = np.reshape(X_train,[X_train.shape[0]*X_train.shape[1],-1])
@@ -291,7 +293,8 @@ def run_program(args):
     print("Length of y_train:", len(y_train))
     print("Length of X_test:", len(X_test))
     print("Length of y_test:", len(y_test))
-
+    print("Length of X_test_otherdb:", len(X_test_otherdb))
+    print("Length of y_test_otherdb:", len(y_test_otherdb))
 
     print ('Classes in the training set: ', classes)
     for cl in classes:
@@ -330,9 +333,38 @@ def run_program(args):
         print("------------------------- Confusion matrix ------------------------")
         print(confusion_matrix_result)
         classification_report_result = classification_report(y_true_batch, y_pred_batch, target_names=classes, digits=4)
+        return confusion_matrix_result, classification_report_result
+
+    def test_model_for_other_db():
+        acc_track = []
+        sum_test_conf = []
+        y_true_batch = []  
+        y_pred_batch = []
+        for batch_i, (source_batch, target_batch) in enumerate(batch_data(X_test_otherdb, y_test_otherdb, batch_size)):
+
+            dec_input = np.zeros((len(source_batch), 1)) + char2numY['<GO>']
+            for i in range(y_seq_length):
+                batch_logits = sess.run(logits,
+                                        feed_dict={inputs: source_batch, dec_inputs: dec_input})
+                prediction = batch_logits[:, -1].argmax(axis=-1)
+                dec_input = np.hstack([dec_input, prediction[:, None]])
+
+            acc_track.append(dec_input[:, 1:] == target_batch[:, 1:])
+            y_true= target_batch[:, 1:].flatten()
+            y_pred = dec_input[:, 1:].flatten()
+            y_true_batch.extend(y_true)  
+            y_pred_batch.extend(y_pred)
+            
+        print("The shape of y_pred : " + str(len(y_pred_batch))) # 200 pulses x 101 the length of the sequence y
+        print("The shape of y_true  : " + str(len(y_true_batch)))
+        confusion_matrix_result = confusion_matrix(y_true_batch, y_pred_batch, labels=range(len(char2numY) - 1))
+        print("------------------------- Confusion matrix ------------------------")
+        print(confusion_matrix_result)
+        classification_report_result = classification_report(y_true_batch, y_pred_batch, target_names=classes, digits=4)        
+        return confusion_matrix_result, classification_report_result    
 
         
-        return confusion_matrix_result, classification_report_result
+        
     train_loss_history = []
     test_loss_history = []
     loss_track = []
@@ -357,6 +389,17 @@ def run_program(args):
             # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
             saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir))
             confusion_matrix_result, classification_report_result = test_model()
+            print(classification_report_result)
+            checkpoint_dir_incartdb = '/Users/macbookair/Desktop/Thesis_ecg/Database/incartdb/checkpoints-seq2seq'
+            ckpt = tf.train.get_checkpoint_state(checkpoint_dir_incartdb)
+            if ckpt and ckpt.model_checkpoint_path:
+                dataset_name = os.path.basename(os.path.dirname(checkpoint_dir_incartdb))
+                print('**********************************************   Testing the model trained on {}'.format(dataset_name))
+                ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+                # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
+                saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir_incartdb))
+                confusion_matrix_result, classification_report_result = test_model_for_other_db()
+                print(classification_report_result)
         else:
             
             #max_seq_length = max(max(len(seq) for seq in seqs) for seqs in X_train)
