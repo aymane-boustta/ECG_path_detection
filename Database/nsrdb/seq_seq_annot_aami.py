@@ -202,7 +202,7 @@ def main():
     parser.add_argument('--max_time', type=int, default=10)
     parser.add_argument('--test_steps', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=20)
-    parser.add_argument('--data_dir', type=str, default='Test_MITBIH/s2s_mitbih_aami')
+    parser.add_argument('--data_dir', type=str, default='nsrdb/s2s_nsrdb_aami')
     parser.add_argument('--bidirectional', type=str2bool, default=str2bool('False'))
     # parser.add_argument('--lstm_layers', type=int, default=2)
     parser.add_argument('--num_units', type=int, default=128)
@@ -268,50 +268,50 @@ def run_program(args):
 
 
     # split the dataset into the training and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.999, random_state=42)
 
-    # over-sampling: SMOTE
-    X_train = np.reshape(X_train,[X_train.shape[0]*X_train.shape[1],-1])
-    y_train= y_train[:,1:].flatten()
+    # # over-sampling: SMOTE
+    # X_train = np.reshape(X_train,[X_train.shape[0]*X_train.shape[1],-1])
+    # y_train= y_train[:,1:].flatten()
 
-    nums = []
-    for cl in classes:
-        ind = np.where(classes == cl)[0][0]
-        nums.append(len(np.where(y_train.flatten()==ind)[0]))
-    # ratio={0:nums[3],1:nums[1],2:nums[3],3:nums[3]} # the best with 11000 for N
-    ratio={0:n_oversampling,1:nums[1],2:n_oversampling,3:n_oversampling}
-    sm = SMOTE(random_state=12,ratio=ratio)
-    X_train, y_train = sm.fit_sample(X_train, y_train)
+    # nums = []
+    # for cl in classes:
+    #     ind = np.where(classes == cl)[0][0]
+    #     nums.append(len(np.where(y_train.flatten()==ind)[0]))
+    # # ratio={0:nums[3],1:nums[1],2:nums[3],3:nums[3]} # the best with 11000 for N
+    # ratio={0:n_oversampling,1:nums[1],2:n_oversampling,3:n_oversampling}
+    # sm = SMOTE(random_state=12,ratio=ratio)
+    # X_train, y_train = sm.fit_sample(X_train, y_train)
 
-    # X_train = X_train[:(X_train.shape[0]/max_time)*max_time,:]
-    # y_train = y_train[:(X_train.shape[0]/max_time)*max_time]
+    # # X_train = X_train[:(X_train.shape[0]/max_time)*max_time,:]
+    # # y_train = y_train[:(X_train.shape[0]/max_time)*max_time]
 
-    # X_train = np.reshape(X_train,[-1,X_test.shape[1],X_test.shape[2]])
-    # y_train = np.reshape(y_train,[-1,y_test.shape[1]-1,])
+    # # X_train = np.reshape(X_train,[-1,X_test.shape[1],X_test.shape[2]])
+    # # y_train = np.reshape(y_train,[-1,y_test.shape[1]-1,])
     
-    X_train = X_train[:(X_train.shape[0]//max_time)*max_time, :]
-    y_train = y_train[:(X_train.shape[0]//max_time)*max_time]
+    # X_train = X_train[:(X_train.shape[0]//max_time)*max_time, :]
+    # y_train = y_train[:(X_train.shape[0]//max_time)*max_time]
 
-    X_train = np.reshape(X_train, [-1, X_test.shape[1], X_test.shape[2]])
-    y_train = np.reshape(y_train, [-1, y_test.shape[1] - 1])
+    # X_train = np.reshape(X_train, [-1, X_test.shape[1], X_test.shape[2]])
+    # y_train = np.reshape(y_train, [-1, y_test.shape[1] - 1])
 
-    y_train= [[char2numY['<GO>']] + [y_ for y_ in date] for date in y_train]
-    y_train = np.array(y_train)
+    # y_train= [[char2numY['<GO>']] + [y_ for y_ in date] for date in y_train]
+    # y_train = np.array(y_train)
 
 
-    print("Length of X_train:", len(X_train))
-    print("Length of y_train:", len(y_train))
+    # print("Length of X_train:", len(X_train))
+    # print("Length of y_train:", len(y_train))
     print("Length of X_test:", len(X_test))
     print("Length of y_test:", len(y_test))
 
 
-    print ('Classes in the training set: ', classes)
-    for cl in classes:
-        ind = np.where(classes == cl)[0][0]
-        print (cl, len(np.where(y_train.flatten()==ind)[0]))
-    print ("------------------y_train samples--------------------")
-    for ii in range(2):
-      print(''.join([num2charY[y_] for y_ in list(y_train[ii+5])]))
+    # print ('Classes in the training set: ', classes)
+    # for cl in classes:
+    #     ind = np.where(classes == cl)[0][0]
+    #     print (cl, len(np.where(y_train.flatten()==ind)[0]))
+    # print ("------------------y_train samples--------------------")
+    # for ii in range(2):
+    #   print(''.join([num2charY[y_] for y_ in list(y_train[ii+5])]))
     print ("------------------y_test samples--------------------")
     for ii in range(2):
       print(''.join([num2charY[y_] for y_ in list(y_test[ii+5])]))
@@ -361,79 +361,21 @@ def run_program(args):
         sess.run(tf.local_variables_initializer())
         saver = tf.train.Saver()
         print(str(datetime.now()))
-        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-        pre_acc_avg = 0.0
-        if ckpt and ckpt.model_checkpoint_path:
-            # # Restore
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
-            saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir))
-            confusion_matrix_result, classification_report_result = test_model()
-        else:
-            
-            #max_seq_length = max(max(len(seq) for seq in seqs) for seqs in X_train)
-            for epoch_i in range(epochs):
-                train_loss = 0.0
-                start_time = time.time()
-                train_acc = []
-                
-                for batch_i, (source_batch, target_batch) in enumerate(batch_data(X_train, y_train, batch_size)):
-                    
+        checkpoint_folders = ['/Users/macbookair/Desktop/Thesis_ecg/Database/Test_MITBIH/checkpoints-seq2seq', '/Users/macbookair/Desktop/Thesis_ecg/Database/incartdb/checkpoints-seq2seq']
+        for checkpoint_dir in checkpoint_folders:
+            ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+            if ckpt and ckpt.model_checkpoint_path:
+                dataset_name = os.path.basename(os.path.dirname(checkpoint_dir))
+                print('Testing the model trained on {}'.format(dataset_name))
 
-                    _, batch_loss, batch_logits = sess.run([optimizer, loss, logits],
-                        feed_dict = {inputs: source_batch,
-                                     dec_inputs: target_batch[:, :-1],
-                                     targets: target_batch[:, 1:]})
-                    
-                    loss_track.append(batch_loss)
-                    train_loss += batch_loss
-                    train_acc.append(batch_logits.argmax(axis=-1) == target_batch[:,1:])
-                    
-                train_loss /= (batch_i + 1)
-                accuracy = np.mean(train_acc)
-                train_loss_history.append(train_loss)
-                print('Epoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f} Epoch duration: {:>6.3f}s'.format(epoch_i, batch_loss,
-                                                                                        accuracy, time.time() - start_time))
-                
-                #if epoch_i%test_steps==0 or epoch_i==epochs - 1:
-                if epoch_i % 3 == 0 or epoch_i==epochs - 1:
-                    print("------------------------------- Testing the model --------------------------------")
-                    test_loss = 0.0  
-                    test_acc = []
+                #print('*********************** Testing the model trained on mitbihdb over nsrdb **********************')
+                ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+                # saver.restore(session, os.path.join(checkpoint_dir, ckpt_name))
+                saver.restore(sess, tf.train.latest_checkpoint(checkpoint_dir))
+                confusion_matrix_result, classification_report_result = test_model()
 
-                    for batch_i, (test_source_batch, test_target_batch) in enumerate(batch_data(X_test, y_test, batch_size)):
-                        # Calculate the loss for the test data
-                        batch_loss, _ = sess.run([loss, logits], feed_dict={
-                        inputs: test_source_batch,
-                        dec_inputs: test_target_batch[:, :-1],
-                        targets: test_target_batch[:, 1:]
-                        })
-                        test_loss += batch_loss
-
-                    test_loss /= (batch_i + 1)  # Calculate the average test loss
-                    print('Epoch {} Test Loss: {:.4f}'.format(epoch_i, test_loss))
-                    test_loss_history.append(test_loss)
-                    confusion_matrix_result, classification_report_result = test_model()
-                    print(classification_report_result)
-                    print("----------------------------------------------------------------------------------")            
-
-            #plot_loss(loss_track, test_loss_history)
-            plt.figure()
-            train_epochs = range(0, epochs)
-            test_epochs = range(0, epochs, max(1, epochs // len(test_loss_history)))[:len(test_loss_history)]
-            plt.plot(train_epochs, train_loss_history, label='Training Loss', marker='o')
-            plt.plot(test_epochs, test_loss_history, label='Testing Loss', marker='x')
-            plt.xlabel('Epochs')
-            plt.ylabel('Loss')
-            plt.title('Training and Testing Loss vs. Epochs')
-            plt.legend()
-            plot_filename = "loss_plot.png"
-            plt.savefig(plot_filename)
-            save_path = os.path.join(checkpoint_dir, ckpt_name)
-            saver.save(sess, save_path)
-            print("Model saved in path: %s" % save_path)
-            
-            
+                print(classification_report_result)
+  
   
         print(str(datetime.now()))
         # test_model()
